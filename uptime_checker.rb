@@ -4,6 +4,8 @@ require 'net/http'
 require 'uri'
 require 'json'
 require 'time'
+require 'logger'
+require 'fileutils'
 
 class Site
   attr_reader :url, :interval, :threshold, :command
@@ -33,14 +35,32 @@ class Site
 end
 
 class UptimeChecker
+  LOG_DIR = 'logs'
+
   def initialize
     @sites = []
+    setup_logger
     load_sites
   end
 
+  def setup_logger
+    FileUtils.mkdir_p(LOG_DIR)
+    log_file = File.join(LOG_DIR, "uptime_#{Time.now.strftime('%Y%m%d')}.log")
+    @logger = Logger.new(log_file)
+    @logger.formatter = proc do |severity, datetime, progname, msg|
+      "#{datetime.strftime('%Y-%m-%d %H:%M:%S')} #{severity}: #{msg}\n"
+    end
+  end
+
+  def log_message(message, level = :info)
+    timestamp = Time.now.strftime('%Y-%m-%d %H:%M:%S')
+    puts "#{timestamp} - #{message}"
+    @logger.send(level, message)
+  end
+
   def add_site
-    puts "\nAdd new site to monitor"
-    puts "------------------------"
+    log_message("\nAdd new site to monitor")
+    log_message("------------------------")
     print "Enter URL (e.g., https://example.com): "
     url = gets.chomp
 
@@ -65,31 +85,32 @@ class UptimeChecker
       )
       @sites << site
       save_sites
-      puts "\nSite added successfully!"
-      puts "URL: #{url}"
-      puts "Checking every #{interval} seconds"
-      puts "Will run command after #{threshold} failures"
-      puts "Command: #{command || 'None'}"
+
+      log_message("\nSite added successfully!")
+      log_message("URL: #{url}")
+      log_message("Checking every #{interval} seconds")
+      log_message("Will run command after #{threshold} failures")
+      log_message("Command: #{command || 'None'}")
     rescue URI::InvalidURIError
-      puts "\nError: Invalid URL format. Make sure to include http:// or https://"
+      log_message("\nError: Invalid URL format. Make sure to include http:// or https://", :error)
     end
   end
 
   def list_sites
     if @sites.empty?
-      puts "\nNo sites configured yet. Use 'add' to monitor a site."
+      log_message("\nNo sites configured yet. Use 'add' to monitor a site.")
       return
     end
 
-    puts "\nMonitored Sites"
-    puts "--------------"
+    log_message("\nMonitored Sites")
+    log_message("--------------")
     @sites.each_with_index do |site, index|
-      puts "\n#{index + 1}. #{site.url}"
-      puts "   Check interval: #{site.interval} seconds"
-      puts "   Failure threshold: #{site.threshold}"
-      puts "   Current failures: #{site.failures}"
-      puts "   Command: #{site.command || 'None'}"
-      puts "   Last checked: #{site.last_checked || 'Never'}"
+      log_message("\n#{index + 1}. #{site.url}")
+      log_message("   Check interval: #{site.interval} seconds")
+      log_message("   Failure threshold: #{site.threshold}")
+      log_message("   Current failures: #{site.failures}")
+      log_message("   Command: #{site.command || 'None'}")
+      log_message("   Last checked: #{site.last_checked || 'Never'}")
     end
   end
 
@@ -103,15 +124,15 @@ class UptimeChecker
     if index >= 0 && index < @sites.length
       removed = @sites.delete_at(index)
       save_sites
-      puts "\nRemoved: #{removed.url}"
+      log_message("\nRemoved: #{removed.url}")
     else
-      puts "\nInvalid site number"
+      log_message("\nInvalid site number", :error)
     end
   end
 
   def start_monitoring
-    puts "\nStarting monitoring... Press Ctrl+C to stop"
-    puts "----------------------------------------"
+    log_message("\nStarting monitoring... Press Ctrl+C to stop")
+    log_message("----------------------------------------")
 
     loop do
       @sites.each do |site|
@@ -120,7 +141,7 @@ class UptimeChecker
       sleep 1
     end
   rescue Interrupt
-    puts "\nStopping monitoring..."
+    log_message("\nStopping monitoring...")
     save_sites
   end
 
@@ -142,12 +163,13 @@ class UptimeChecker
       handle_failure(site)
     end
   rescue StandardError => e
+    log_message("Error checking #{site.url}: #{e.message}", :error)
     handle_failure(site)
   end
 
   def handle_success(site)
     if site.failures > 0
-      puts "#{site.url} is back UP"
+      log_message("#{site.url} is back UP")
     end
     site.failures = 0
     site.command_executed = false
@@ -156,11 +178,24 @@ class UptimeChecker
 
   def handle_failure(site)
     site.failures += 1
-    puts "#{site.url} is DOWN (Failure #{site.failures}/#{site.threshold})"
+    log_message("#{site.url} is DOWN (Failure #{site.failures}/#{site.threshold})")
+
+    # Reset command_executed flag when failures reach threshold again
+    if site.failures >= site.threshold && site.command_executed
+      site.command_executed = false
+    end
 
     if site.failures >= site.threshold && !site.command_executed && site.command
-      puts "Running command: #{site.command}"
-      system(site.command)
+      log_message("Running command: #{site.command}")
+      execution_result = system(site.command)
+      if execution_result
+        log_message("Command executed successfully")
+        # Reset failure count after successful command execution
+        site.failures = 0
+        log_message("Reset failure count to 0 after command execution")
+      else
+        log_message("Command execution failed", :error)
+      end
       site.command_executed = true
     end
     save_sites
@@ -181,11 +216,14 @@ class UptimeChecker
         threshold: data['threshold'],
         command: data['command']
       )
-      site.failures = data['failures']
-      site.last_checked = data['last_checked']
-      site.command_executed = data['command_executed']
+      # Reset failures and command_executed state on script startup
+      site.failures = 0
+      site.last_checked = nil
+      site.command_executed = false
       site
     end
+    log_message("Loaded #{@sites.length} sites from configuration")
+    log_message("Reset all failure counts to 0 on startup")
   end
 end
 
