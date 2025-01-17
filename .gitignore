@@ -1,0 +1,6 @@
+# Ignore sites configuration file
+sites.json
+
+# Ignore logs directory and all its contents
+/logs/
+*.log
