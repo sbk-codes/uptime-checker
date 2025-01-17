@@ -22,7 +22,7 @@ A Ruby script that monitors website uptime and executes commands when sites are 
 
 1. Download the script:
 ```bash
-wget https://raw.githubusercontent.com/yourusername/uptime-checker/main/uptime_checker.rb
+git clone https://github.com/sbk-codes/uptime-checker.git
 ```
 
 2. Make the script executable:
@@ -64,7 +64,8 @@ When adding a site, you'll be prompted for:
 
 4. Command to execute
    - Command to run when site is down
-   - Example for Heroku: `heroku restart -a myapp`
+   - Example for Heroku: `heroku ps:restart -a myapp`
+   - Example for Build: `bld ps:restart --app=myapp`
    - Leave empty for no action
 
 Example:
@@ -114,20 +115,6 @@ Example log entry:
 - Site configurations are stored in `sites.json`
 - Failures reset to 0 when script restarts
 - Site list persists between runs
-
-## Example Use Cases
-
-1. Monitoring Heroku apps:
-```
-URL: https://myapp.herokuapp.com
-Command: heroku ps:restart --app=myapp
-```
-
-2. Monitoring with Slack notification:
-```
-URL: https://myapp.com
-Command: curl -X POST -H 'Content-type: application/json' --data '{"text":"Site is down!"}' YOUR_SLACK_WEBHOOK_URL
-```
 
 ## Troubleshooting
 
