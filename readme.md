@@ -16,7 +16,7 @@ A Ruby script that monitors website uptime and executes commands when sites are 
 
 - Ruby (version 2.0 or higher)
 - Basic knowledge of terminal/command line
-- Heroku CLI (if monitoring Heroku apps)
+- Heroku or BLD CLI (if monitoring Heroku/BLD apps)
 
 ## Installation
 
